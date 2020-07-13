@@ -133,11 +133,11 @@ if len(proplist) > 0:
     properties_saved = 0
     properties_existing = 0
 
-    for p in proplist:
+    for p in proplist: # consider adding tqdm - and removing print statements in storage
         if storage.insert(city, p['Date_Listed'], p['Price'], p['Address'], p['Beds'], p['Bathrooms'], p['Reception_rooms'], p['Agent_Name'], p['Agent_tel']) == 'new':
             properties_saved += 1
         else:
             properties_existing += 1
         print(f"Saved {properties_saved} to {city} - {properties_existing} already in database")
-        
+
     print("Saved to DB")
