@@ -1,0 +1,6 @@
+__pycache__/
+property_data.db
+average_prices.txt
+*csv
+*xlsx
+*xls

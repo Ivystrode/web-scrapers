@@ -11,6 +11,8 @@ import datetime
 from copy import deepcopy
 from tqdm import tqdm
 
+import storage
+
 print("\nProperty data scraper. UK cities only.\n")
 
 city = input("Enter city name: ")
@@ -33,12 +35,12 @@ all = soup.find_all("div", {"class":"listing-results-wrapper"})
 
 for page in soup.find_all("div", {"class":"paginate bg-muted"}):
     numpages = page.find_all("a")[-2].text
+
 print(str(numpages) + " pages of results...\n")
 
 
 if len(all) < 1:
     print("\nNothing found. Ensure city name entered correctly.")
-
 
 i = 0
 proplist = []
@@ -53,23 +55,17 @@ if int(numpages) > 50:
         print("Program terminated")
         exit()
 print("\nScanning " + str(numpages) + " pages...\n")
+
 for page in tqdm(range(1, int(numpages)+1, 1)):
     r = requests.get(base_url + str(page))
     c = r.content
     soup=BeautifulSoup(c, "lxml")
     all = soup.find_all("div", {"class":"listing-results-wrapper"})
-    #print("Scanning page: " + str(page))
+
     for item in all:
 
         property = {}
         i += 1
-        # print("Property " + str(i))
-        # print(str(item.find("a", {"class":"listing-results-price text-price"}).text.replace("\n", "").replace("Offersinregionof", "").replace(" ", "").replace("Offersover", "")))
-        # print(item.find_all("a", {"class":"listing-results-address"})[0].text)
-        # try:
-        #     print(str(item.find("span", {"class":"num-icon num-beds"}).text) + " bedrooms")
-        # except:
-        #     print("Unknown number of bedrooms")
 
         property["Date_Listed"]=item.find("p", {"class":"top-half listing-results-marketed"}).find("small").text.replace(" ", "").replace("\n", "").replace("Listedon", "").replace("by", "")
         try:
@@ -102,22 +98,20 @@ for page in tqdm(range(1, int(numpages)+1, 1)):
             property["Agent_tel"]=item.find("span", {"class":"agent_phone"}).find("span").text
         except:
             property["Agent_tel"]="None"
-        #print(" ")
+
         proplist.append(property)
 
 if len(proplist) > 0:
     print (str(len(proplist)) + " properties found")
     print ("On " + str(numpages) + " pages\n")
     df = pandas.DataFrame(proplist)
-    #df["Price"].fillna("0", inplace=True)
-    # print(df["Price"])
-    # print(type(df["Price"]))
+
     try:
         avprice = np.asarray(df["Price"], dtype=np.int).mean()
         print("Average Price: ")
         print(avprice)
         print("Properties with price not explicitly specified excluded from average")
-        #df.append({'Price':avprice}) # how do i add average price to end of list?
+
         with open("average_prices.txt", 'a') as file:
             file.write(f"\nAverage Price from ZOOPLA for properties within {radius} miles of {city}: " + "£" + str(int(avprice)))
     
@@ -125,9 +119,25 @@ if len(proplist) > 0:
         print("Cannot calculate average")
 
     save_prompt = input("\nSave results as spreadsheet? y/n: ")
+
     if "y" in save_prompt:
         filename = input("Enter file name: ")
         df.to_csv(f"{filename}.csv")
         print(f"Saved data in file: '{filename}.csv'")
     else:
-        print("Program terminated")
+        print("No spreadsheet saved")
+    
+    print(f"Saving {len(proplist)} properties to {city.upper()} database...")
+    storage.connect(city)
+
+    properties_saved = 0
+    properties_existing = 0
+
+    for p in proplist:
+        if storage.insert(city, p['Date_Listed'], p['Price'], p['Address'], p['Beds'], p['Bathrooms'], p['Reception_rooms'], p['Agent_Name'], p['Agent_tel']) == 'new':
+            properties_saved += 1
+        else:
+            properties_existing += 1
+        print(f"Saved {properties_saved} to {city} - {properties_existing} already in database")
+        
+    print("Saved to DB")
