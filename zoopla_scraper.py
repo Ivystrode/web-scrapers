@@ -1,19 +1,21 @@
 #https://www.zoopla.co.uk/for-sale/houses/edinburgh/?q=Edinburgh&radius=40&results_sort=newest_listings&search_source=refine
 #https://www.zoopla.co.uk/for-sale/houses/edinburgh/?identifier=edinburgh&property_type=houses&q=Edinburgh&search_source=refine&radius=40&pn=2
 
-import requests # pylint: disable=import-error
-from bs4 import BeautifulSoup, SoupStrainer # pylint: disable=import-error
-import pandas # pylint: disable=import-error
-import re # pylint: disable=import-error
+import requests 
+from bs4 import BeautifulSoup, SoupStrainer
+import pandas
+import re 
 import numpy as np
 import os
 import datetime
 from copy import deepcopy
 from tqdm import tqdm
+from datetime import datetime
 
 import storage
 
 print("\nProperty data scraper. UK cities only.\n")
+search_time = datetime.now().strftime("%Y-%m-%d_%H%M")
 
 city = input("Enter city name: ")
 radius = input("Enter geographic search radius (maximum 40): ")
@@ -27,7 +29,7 @@ if int(radius) not in accepted_radii:
 
 headers = {'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:61.0) Gecko/20100101 Firefox/61.0'}
 
-r = requests.get(f"https://www.zoopla.co.uk/for-sale/houses/{city}/?identifier={city}&property_type=houses&q={city}&search_source=refine&radius={radius}&pn=1", headers={'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:61.0) Gecko/20100101 Firefox/61.0'})
+r = requests.get(f"https://www.zoopla.co.uk/for-sale/houses/{city}/?identifier={city}&property_type=houses&q={city}&search_source=refine&radius={radius}&pn=1", headers=headers)
 c = r.content
 soup = BeautifulSoup(c, "html.parser")
 all = soup.find_all("div", {"class":"listing-results-wrapper"})
@@ -54,6 +56,7 @@ if int(numpages) > 50:
     else:
         print("Program terminated")
         exit()
+
 print("\nScanning " + str(numpages) + " pages...\n")
 
 for page in tqdm(range(1, int(numpages)+1, 1)):
@@ -98,6 +101,8 @@ for page in tqdm(range(1, int(numpages)+1, 1)):
             property["Agent_tel"]=item.find("span", {"class":"agent_phone"}).find("span").text
         except:
             property["Agent_tel"]="None"
+        property["Website"] = "Zoopla"
+        property["Acquire_time"] = str(search_time)
 
         proplist.append(property)
 
@@ -113,7 +118,7 @@ if len(proplist) > 0:
         print("Properties with price not explicitly specified excluded from average")
 
         with open("average_prices.txt", 'a') as file:
-            file.write(f"\nAverage Price from ZOOPLA for properties within {radius} miles of {city}: " + "£" + str(int(avprice)))
+            file.write(f"\n{search_time}_Average Price from OTM for properties within {radius} miles of {city}: " + "£" + str(int(avprice)))
     
     except:
         print("Cannot calculate average")
@@ -121,7 +126,7 @@ if len(proplist) > 0:
     save_prompt = input("\nSave results as spreadsheet? y/n: ")
 
     if "y" in save_prompt:
-        filename = input("Enter file name: ")
+        filename = f"{search_time}_{city}"
         df.to_csv(f"{filename}.csv")
         print(f"Saved data in file: '{filename}.csv'")
     else:
@@ -134,7 +139,7 @@ if len(proplist) > 0:
     properties_existing = 0
 
     for p in proplist: # consider adding tqdm - and removing print statements in storage
-        if storage.insert(city, p['Date_Listed'], p['Price'], p['Address'], p['Beds'], p['Bathrooms'], p['Reception_rooms'], p['Agent_Name'], p['Agent_tel']) == 'new':
+        if storage.insert(city, p['Date_Listed'], p['Price'], p['Address'], p['Beds'], p['Bathrooms'], p['Reception_rooms'], p['Agent_Name'], p['Agent_tel'], p['Website'], p['Acquire_time']) == 'new':
             properties_saved += 1
         else:
             properties_existing += 1

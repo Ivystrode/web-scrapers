@@ -1,12 +1,16 @@
 #https://www.onthemarket.com/for-sale/property/plymouth/
 
-import requests # pylint: disable=import-error
-from bs4 import BeautifulSoup # pylint: disable=import-error
-import pandas # pylint: disable=import-error
-import re # pylint: disable=import-error
+import requests 
+from bs4 import BeautifulSoup 
+import pandas 
+import re 
 import numpy as np
+from datetime import datetime
+
+import storage
 
 print("\nProperty data scraper. UK cities only.\n")
+search_time = datetime.now().strftime("%Y-%m-%d_%H%M")
 
 city = input("Enter city name: ")
 radius = input("Enter geographic search radius (maximum 40): ")
@@ -51,18 +55,15 @@ if int(numpages) > 50:
         exit()
 
 for page in range(0, int(numpages)+1, 1):
-    #print("============PAGE " + str(page) + "================")
     r = requests.get(f"https://www.onthemarket.com/for-sale/property/{city}/?page=" + str(page) + "&?radius={radius}", headers={'User-agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:61.0) Gecko/20100101 Firefox/61.0'})
     c = r.content
     soup=BeautifulSoup(c, "html.parser")
     all = soup.find_all("li", {"class":"result"})
+
     for item in all:
         property = {}
         i += 1
 
-        print("Property " + str(i))
-        print(str(item.find("a", {"class":"price"}).text))
-        print(item.find_all("span", {"class":"address"})[0].text)
         try:
             print(str(item.find("span", {"class":"title"}).text))
         except:
@@ -83,14 +84,15 @@ for page in range(0, int(numpages)+1, 1):
         except:
             property["Beds"]="0"
         try:
-            property["Agent Name"]=item.find("a", {"class":"marketed-by-link"}).text
+            property["Agent_Name"]=item.find("a", {"class":"marketed-by-link"}).text
         except:
-            property["Agent Name"]="None"
+            property["Agent_Name"]="None"
         try:
-            property["Agent tel"]=item.find("span", {"class":"call"}).text #find("span").text
+            property["Agent_tel"]=item.find("span", {"class":"call"}).text #find("span").text
         except:
-            property["Agent tel"]="None"
-        print(" ")
+            property["Agent_tel"]="None"
+        property["Website"] = "OTM"
+        property["Acquire_time"] = str(search_time)
         proplist.append(property)
 
 if len(proplist) > 0:
@@ -103,9 +105,9 @@ if len(proplist) > 0:
         print("Average Price: ")
         print(avprice)
         print("Properties with price not explicitly specified excluded from average")
-        #df.append({'Price':avprice}) # how do i add average price to end of list?
+
         with open("average_prices.txt", 'a') as file:
-            file.write(f"\nAverage Price from OTM for properties within {radius} miles of {city}: " + "£" + str(int(avprice)))
+            file.write(f"\n{search_time}_Average Price from OTM for properties within {radius} miles of {city}: " + "£" + str(int(avprice)))
     
     except:
         print("Cannot calculate average")
@@ -113,8 +115,23 @@ if len(proplist) > 0:
     save_prompt = input("\nSave results as spreadsheet? y/n: ")
 
     if "y" in save_prompt:
-        filename = input("Enter file name: ")
+        filename = f"{search_time}_{city}"
         df.to_csv(f"{filename}.csv")
         print(f"Saved data in file: '{filename}.csv'")
     else:
-        print("Program terminated")
+        print("No spreadsheet saved")
+
+    print(f"Saving {len(proplist)} properties to {city.upper()} database...")
+    storage.connect(city)
+
+    properties_saved = 0
+    properties_existing = 0
+
+    for p in proplist: # consider adding tqdm - and removing print statements in storage
+        if storage.insert(city, 'N/A', p['Price'], p['Address'], p['Beds'], 'N/A', 'N/A', p['Agent_Name'], p['Agent_tel'], p['Website'], p['Acquire_time']) == 'new':
+            properties_saved += 1
+        else:
+            properties_existing += 1
+        print(f"Saved {properties_saved} to {city} - {properties_existing} already in database")
+
+    print("Saved to DB")
